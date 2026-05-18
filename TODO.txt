@@ -1,0 +1,1 @@
+Use https://www.weatherapi.com/api-explorer.aspx#history to find wind strength. Gotta calculate the direction everytime to get the wind right => influence the power calculation
