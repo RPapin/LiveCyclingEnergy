@@ -3,3 +3,4 @@ report/*
 datalake/all_activities.json
 datalake/all_stats.json
 .venv
+.idea

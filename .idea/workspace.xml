@@ -5,26 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="d30bf410-94b6-4415-9699-5f941fbaf321" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.env" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/TODO.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/datalake/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/datalake/all_stats.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/datalake/athletes.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/datalake/duckDB_utils.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/math_utils/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/math_utils/power_utils.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/models/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/models/model_physio.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/retriever/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/retriever/strava_api.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/retriever/strava_retriever_batch.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/visualisation/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/visualisation/energy_plot.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -32,7 +14,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="28" />
+    <option name="cachedIndexableFilesCount" value="31" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -116,6 +98,7 @@
       <workItem from="1778679798363" duration="5860000" />
       <workItem from="1778833157515" duration="6460000" />
       <workItem from="1778850761063" duration="1953000" />
+      <workItem from="1779091163548" duration="707000" />
     </task>
     <servers />
   </component>
