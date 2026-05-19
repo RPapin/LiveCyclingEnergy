@@ -1,4 +1,7 @@
 import math
+from typing import Union
+
+import pandas as pd
 
 def compute_power(
     speed_ms: float,          # speed in m/s
@@ -53,4 +56,96 @@ def compute_power(
         "power_drivetrain_w":round(p_drivetrain, 1),
         "air_density":       round(air_density, 4),
         "w_per_kg":          round(p_total / mass_kg, 2) if p_total > 0 else 0,
+    }
+
+
+# ─────────────────────────────────────────────
+# FTP estimation via Mean Maximal Power (MMP)
+# ─────────────────────────────────────────────
+
+DEFAULT_DURATIONS = [60, 300, 600, 1200, 3600]  # 1 min, 5 min, 10 min, 20 min, 60 min
+
+
+def compute_mmp(
+    power_series: pd.Series,
+    min_gradient_pct,
+    gradient_series: pd.Series = None,
+    durations_seconds: list = None,
+) -> dict:
+    """
+    Compute the Mean Maximal Power (MMP) curve for a single ride.
+
+    When gradient_series is provided only continuous climbing segments
+    (gradient >= min_gradient_pct) are considered, so the rolling windows
+    never cross flat or descending sections where the physics model is
+    unreliable (wind noise, coast-down, etc.).
+
+    Returns {duration_seconds: best_avg_watts} — None when no climbing
+    segment is long enough for that duration.
+    """
+    if durations_seconds is None:
+        durations_seconds = DEFAULT_DURATIONS
+
+    mmp: dict = {dur: None for dur in durations_seconds}
+    for dur in durations_seconds:
+        if len(power_series) < dur:
+            continue
+        rolling_power = power_series.rolling(window=dur, min_periods=dur).mean()
+        if gradient_series is not None:
+            rolling_gradient = gradient_series.rolling(window=dur, min_periods=dur).mean()
+            rolling_power = rolling_power[rolling_gradient >= min_gradient_pct]
+        if not rolling_power.empty:
+            best = rolling_power.max()
+            if not pd.isna(best):
+                mmp[dur] = round(float(best), 1)
+
+    return mmp
+
+
+def estimate_ftp(
+    power_sources: Union[pd.Series, list],
+    min_gradient_pct: float,
+    gradient_sources: Union[pd.Series, list, None] = None,
+    durations_seconds: list = None,
+) -> dict:
+    """
+    Estimate FTP from one or several rides using the 20-minute method.
+
+    power_sources    : a single pd.Series or a list of pd.Series (one per ride).
+    gradient_sources : matching gradient pd.Series or list thereof. When provided,
+                       only climbing segments are considered (passed to compute_mmp).
+    FTP ≈ 95% × best 20-minute average power across all rides.
+
+    Returns:
+        ftp_watts       : estimated FTP in watts (None if no climbing segment ≥ 20 min)
+        best_20min_watts: raw best 20-min power before the 0.95 factor
+        mmp             : merged MMP curve {duration_s: best_avg_w}
+    """
+    if durations_seconds is None:
+        durations_seconds = DEFAULT_DURATIONS
+
+    if isinstance(power_sources, pd.Series):
+        power_sources = [power_sources]
+    if isinstance(gradient_sources, pd.Series):
+        gradient_sources = [gradient_sources]
+
+    merged: dict = {dur: None for dur in durations_seconds}
+    for idx, series in enumerate(power_sources):
+        grad = gradient_sources[idx] if gradient_sources is not None else None
+        ride_mmp = compute_mmp(
+            series,
+            gradient_series=grad,
+            min_gradient_pct=min_gradient_pct,
+            durations_seconds=durations_seconds,
+        )
+        for dur, val in ride_mmp.items():
+            if val is not None:
+                merged[dur] = val if merged[dur] is None else max(merged[dur], val)
+
+    best_20min = merged.get(1200)
+    ftp = round(best_20min * 0.95, 1) if best_20min is not None else None
+    return {
+        "ftp_watts": ftp,
+        "best_20min_watts": best_20min,
+        "mmp": merged,
     }

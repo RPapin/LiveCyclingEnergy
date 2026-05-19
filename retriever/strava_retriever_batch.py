@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 import pandas as pd
 from retriever import strava_api
@@ -9,10 +10,12 @@ from models import model_physio
 from visualisation import energy_plot
 
 RESET_DB = True
-MAX_ACTIVITY_TO_RETRIEVE = 3
+MAX_ACTIVITY_TO_RETRIEVE = 300
 RETRIEVE_ALL_RIDE = True
-access_token = strava_api.get_access_token()
+MIN_GRADIANT_COMPUTE_FTP = 2.0
 
+
+access_token = strava_api.get_access_token()
 
 def retrieve_all():
     if RESET_DB:
@@ -28,6 +31,7 @@ def retrieve_all():
     activities_count = all_stats['all_ride_totals']['count']
     i = 0
     j = 0
+    ride_deleted = []
     if (RETRIEVE_ALL_RIDE):
         while i < activities_count / 100:
             all_activities_by_page = strava_api.get_activities(access_token=access_token, per_page=100, page=i)
@@ -44,45 +48,65 @@ def retrieve_all():
             all_rides = json.load(f)
 
     # Construit les streams des activites
-    while j < MAX_ACTIVITY_TO_RETRIEVE:
-        all_rides[j]['name'] = all_rides[j]['name'].encode('utf-8', errors='replace').decode('utf-8').replace(' ', '_') + '_' + all_rides[j]['start_date_local'].split("T")[0]
-        print('activity name', all_rides[j]['name'])
+    while j < MAX_ACTIVITY_TO_RETRIEVE and j < len(all_rides):
+        all_rides[j]['name'] = format_name_from_strava(all_rides[j]['name'], all_rides[j]['start_date_local'])
         activity_id = all_rides[j]['id']
         athlete_local_info = all_athletes[all_athletes['id'] == all_rides[j]['athlete']['id']].iloc[0]
         activity_stream = strava_api.get_activity_streams(access_token=access_token, activity_id=activity_id)
-        # Compute power
-        stream_power = []
-        for i in range(len(activity_stream['speed'])):
-            if i < len(activity_stream['distance']) - 1 and activity_stream['distance'][i + 1] - activity_stream['distance'][i] != 0.0:
-                gradient = ((activity_stream['altitude'][i + 1] - activity_stream['altitude'][i]) /
-                        (activity_stream['distance'][i + 1] - activity_stream['distance'][i])) * 100
-            else:
-                gradient = 0
+        if 0 in {key: len(val) for key, val in activity_stream.items()}.values():
+            all_rides.pop(j)
+            j -= 1
+        else:
+            # Compute power
+            stream_power = []
+            stream_gradient = []
+            for i in range(len(activity_stream['speed'])):
+                if i < len(activity_stream['distance']) - 1 and activity_stream['distance'][i + 1] - activity_stream['distance'][i] != 0.0:
+                    gradient = ((activity_stream['altitude'][i + 1] - activity_stream['altitude'][i]) /
+                            (activity_stream['distance'][i + 1] - activity_stream['distance'][i])) * 100
+                else:
+                    gradient = 0
 
-            power_computed = power_utils.compute_power(
-                speed_ms=activity_stream['speed'][i],
-                gradient=gradient,
-                mass_kg=athlete_local_info['weight'],
-                altitude_m=activity_stream['altitude'][i],
-                temp_celsius=activity_stream['temp'][i] if activity_stream['temp'] else 20,
+                power_computed = power_utils.compute_power(
+                    speed_ms=activity_stream['speed'][i],
+                    gradient=gradient,
+                    mass_kg=athlete_local_info['weight'],
+                    altitude_m=activity_stream['altitude'][i],
+                    temp_celsius=activity_stream['temp'][i] if activity_stream['temp'] else 20,
+                )
+                stream_power.append(power_computed['power_total_w'])
+                stream_gradient.append(gradient)
+
+            activity_stream['power'] = stream_power
+
+            ftp_result = power_utils.estimate_ftp(
+                pd.Series(stream_power),
+                min_gradient_pct=MIN_GRADIANT_COMPUTE_FTP,
+                gradient_sources=pd.Series(stream_gradient),
             )
-            stream_power.append(power_computed['power_total_w'])
+            all_rides[j]['ftp'] = ftp_result['ftp_watts']
+            print(f"[{all_rides[j]['name']}] FTP estimate: {ftp_result['ftp_watts']} W "
+                  f"(best 20min on climbs: {ftp_result['best_20min_watts']} W)")
+            print(f"  MMP curve: { {f'{k//60}min': v for k, v in ftp_result['mmp'].items()} }")
+            all_rides[j]['activity_stream'] = activity_stream
 
-        activity_stream['power'] = stream_power
-        all_rides[j]['activity_stream'] = activity_stream
-
-        # Generate energie calculation based on a physio model
-        CTL = 50  # TODO Charge Chronique à déterminé
-        FTP_WATTS = 250  # TODO à determiné ton FTP en watts
-        df_streams = pd.DataFrame(activity_stream)
-        df_streams['timestamp'] = range(len(df_streams)) #Ajout d'un timestamp pour chaque point TODO précision du timestamp ... ici 1 point = 1 seconde
-        df_result = model_physio.run_energy_model(df_streams, athlete_local_info['weight'], FTP_WATTS, CTL)
-        energy_plot.plot_energy_model(df_result,
-                                      output_path="report/energy_report_{}.html".format(all_rides[j]['name']))
+            # Generate energie calculation based on a physio model
+            CTL = 50  # TODO Charge Chronique à déterminé
+            FTP_WATTS = athlete_local_info['ftp']
+            try:
+                df_streams = pd.DataFrame(activity_stream)
+            except:
+                print("An exception occurred", {key: len(val) for key, val in activity_stream.items()})
+                raise Exception("Sorry, no numbers below zero")
+            df_streams['timestamp'] = range(len(df_streams)) #Ajout d'un timestamp pour chaque point TODO précision du timestamp ... ici 1 point = 1 seconde
+            df_result = model_physio.run_energy_model(df_streams, athlete_local_info['weight'], FTP_WATTS, CTL)
+            energy_plot.plot_energy_model(df_result,
+                                          output_path="report/energy_report_{}.html".format(all_rides[j]['name']))
         j += 1
+
     all_rides = pd.DataFrame(all_rides)
     # Clean Data
-    all_activities_stats = all_rides.loc[:, ['id', 'name', 'distance', 'moving_time']]
+    all_activities_stats = all_rides.loc[:, ['id', 'name', 'distance', 'moving_time', 'ftp']]
     all_activities_stats['athlete_id'] = pd.json_normalize(all_rides['athlete'])['id']
     duckDB.create_all_activities(all_activities_stats)
     # Create child table
@@ -92,3 +116,6 @@ def retrieve_all():
     duckDB.create_all_activity_streams(activity_stream_df)
     duckDB.close_con()
 
+def format_name_from_strava(strava_name: str, start_date: str) -> str:
+    clean = strava_name.encode('utf-8', errors='replace').decode('utf-8')
+    return re.sub(r'[ *]', '_', clean) + '_' + start_date.split("T")[0]

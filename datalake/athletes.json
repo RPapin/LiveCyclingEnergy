@@ -3,13 +3,15 @@
   "name": "Remi Papin",
   "weight": 75,
   "height": 179,
-  "age": 26
+  "age": 26,
+  "ftp": 230
 },
   {
   "id": 37708964,
   "name": "Jean Papin",
   "weight": 90,
   "height": 179,
-  "age": 58
+  "age": 58,
+  "ftp": 200
   }
 ]
